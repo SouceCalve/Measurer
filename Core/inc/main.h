@@ -1,0 +1,44 @@
+#include <sys/stat.h>
+
+// TESTING DEFINES
+//#define test_uart
+#define test_interrupt
+
+// Пустые заглушки системных вызовов.
+// Они имеют приоритет над библиотечными, поэтому линковщик перестанет ругаться.
+
+int _close(int file) { return -1; }
+int _lseek(int file, int ptr, int dir) { return 0; }
+int _read(int file, char *ptr, int len) { return 0; }
+int _write(int file, char *ptr, int len) { return len; }
+
+//Testing functions definition
+
+#ifdef test_interrupt
+__attribute__((used)) void TIM3_IRQHandler(void){ //fuck off keil, this is interrupt handler
+	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, ~(READ_BIT(GPIOB->ODR,GPIO_ODR_OD0_Msk))); //Changing state for PB0 for measuring how frequent interrupt interrupts(pun intended)
+	CLEAR_BIT(TIM3->SR, TIM_SR_UIF_Msk); //disabling interrupt
+}
+#endif
+
+
+
+
+
+#ifdef test_uart
+uint32_t count = 0;
+
+static void usart1_echo(void){ //echo function to test uart
+	while(1){
+		if(READ_BIT(USART1->SR, USART_SR_RXNE)){
+			while(!(READ_BIT(USART1->SR,USART_SR_TXE)));
+			WRITE_REG(USART1->DR,READ_REG(USART1->DR));
+		}
+		else{
+			while(!(READ_BIT(USART1->SR,USART_SR_TXE)));
+			WRITE_REG(USART1->DR,count);
+			count=0;
+		}
+	}
+}
+#endif
