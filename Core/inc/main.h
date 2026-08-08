@@ -2,7 +2,8 @@
 
 // TESTING DEFINES
 //#define test_uart
-#define test_interrupt
+//#define test_interrupt
+//#define test_spi
 
 // Пустые заглушки системных вызовов.
 // Они имеют приоритет над библиотечными, поэтому линковщик перестанет ругаться.
@@ -22,7 +23,23 @@ __attribute__((used)) void TIM3_IRQHandler(void){ //fuck off keil, this is inter
 #endif
 
 
+#ifdef test_spi
 
+
+static void spi_echo(void){ //echo function to test uart
+	uint16_t payload = 0xAAAA;
+	while(1){
+		if(READ_BIT(SPI1->SR, SPI1_SR_RXNE)){
+			while(!(READ_BIT(USART1->SR,USART_SR_TXE)));
+			WRITE_REG(USART1->DR,READ_REG(SPI1->DR));
+		}
+		else{
+			while(!(READ_BIT(SPI1->SR,SPI1_SR_TXE)));
+			WRITE_REG(USART1->DR,payload);
+		}
+	}
+}
+#endif
 
 
 #ifdef test_uart

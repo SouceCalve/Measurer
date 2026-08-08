@@ -61,9 +61,9 @@ static void pins_init(void){
 }
 
 static void timer_init(void){
-	SET_BIT(TIM3->DIER, TIM_DIER_UIE_Msk); //enabling update interrupt generation
-	WRITE_REG(TIM3->ARR, 10000 << TIM_ARR_ARR_Pos); //loading upper limit in counter
-	SET_BIT(TIM3->CR1,TIM_CR1_CEN_Msk); //start the timer
+	SET_BIT(TIM3->DIER, TIM_DIER_UIE_Msk); //Enabling update interrupt generation
+	WRITE_REG(TIM3->ARR, 10000 << TIM_ARR_ARR_Pos); //Loading upper limit in counter
+	SET_BIT(TIM3->CR1,TIM_CR1_CEN_Msk); //Start the timer
 	NVIC_EnableIRQ(TIM3_IRQn); //Adding TIM3 interrupt to interrupt board
 	NVIC_SetPriority(TIM3_IRQn, 5); //Set priority for that interrupt to 1(behind 0)
 }
@@ -77,7 +77,9 @@ static void uart_init(void){
 
 static void spi_init(void){
 	MODIFY_REG(SPI1->CR1,SPI_CR1_BR_Msk, 4 << SPI_CR1_BR_Pos); // baud rate = 100 / 32 = 3.125 Mhz
-	SET_BIT(SPI1->CR1, SPI_CR1_SPE_Msk); //enabling spi
+	SET_BIT(SPI1->CR1, SPI_CR1_DFF_Msk); //Selected frame size as 16 bit
+	SET_BIT(SPI1->CR1, SPI_CR1_MSTR_Msk); //Selected master
+	SET_BIT(SPI1->CR1, SPI_CR1_SPE_Msk); //Enabling spi
 }
 
 int main(void){
@@ -87,7 +89,10 @@ int main(void){
 	uart_init();
 	spi_init();
 #ifdef test_uart
-	usart1_echo();
+	usart1_echo(); //if you want to test uart, just uncomment define in main.h
+#endif
+#ifdef test_spi
+	spi_echo(); //if you want to test spi, just uncomment define in main.h
 #endif
 	while(1);
 }
