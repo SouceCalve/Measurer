@@ -24,18 +24,16 @@ __attribute__((used)) void TIM3_IRQHandler(void){ //fuck off keil, this is inter
 
 
 #ifdef test_spi
-
-
-static void spi_echo(void){ //echo function to test uart
-	uint16_t payload = 0xAAAA;
+static void spi_echo(void){ //echo function to test spi
+	uint16_t payload = 0x4141;
 	while(1){
-		if(READ_BIT(SPI1->SR, SPI1_SR_RXNE)){
+		if(READ_BIT(SPI1->SR, SPI_SR_RXNE)){
 			while(!(READ_BIT(USART1->SR,USART_SR_TXE)));
 			WRITE_REG(USART1->DR,READ_REG(SPI1->DR));
 		}
 		else{
-			while(!(READ_BIT(SPI1->SR,SPI1_SR_TXE)));
-			WRITE_REG(USART1->DR,payload);
+			while(!(READ_BIT(SPI1->SR,SPI_SR_TXE)));
+			WRITE_REG(SPI1->DR,payload);
 		}
 	}
 }

@@ -50,3 +50,10 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+.cproject
+.project
+/.settings
+/CMSIS
+/Debug
+/Startup
+Measurer Debug.launch

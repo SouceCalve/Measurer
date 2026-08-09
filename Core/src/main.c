@@ -79,6 +79,8 @@ static void spi_init(void){
 	MODIFY_REG(SPI1->CR1,SPI_CR1_BR_Msk, 4 << SPI_CR1_BR_Pos); // baud rate = 100 / 32 = 3.125 Mhz
 	SET_BIT(SPI1->CR1, SPI_CR1_DFF_Msk); //Selected frame size as 16 bit
 	SET_BIT(SPI1->CR1, SPI_CR1_MSTR_Msk); //Selected master
+	SET_BIT(SPI1->CR1, SPI_CR1_SSM_Msk); //Selected software SS managment(or else disabling hardware managment for NSS pin, what isnt configured by design)
+	SET_BIT(SPI1->CR1, SPI_CR1_SSI_Msk); //Set virtual NSS pin state to high to sneak way around 1 of MODEFAULT checks
 	SET_BIT(SPI1->CR1, SPI_CR1_SPE_Msk); //Enabling spi
 }
 
