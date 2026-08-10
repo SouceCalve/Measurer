@@ -5,8 +5,7 @@
 //#define test_interrupt
 //#define test_spi
 
-// Пустые заглушки системных вызовов.
-// Они имеют приоритет над библиотечными, поэтому линковщик перестанет ругаться.
+//Gaming with includes brings nothing else as pain///
 
 int _close(int file) { return -1; }
 int _lseek(int file, int ptr, int dir) { return 0; }

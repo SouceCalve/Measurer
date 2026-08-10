@@ -2,10 +2,10 @@
 #include "main.h"
 typedef union{
 	struct __attribute__((__packed__)){
-		uint32_t : 28;
-		uint32_t RANGE_SEL : 4;
+		uint16_t : 28;
+		uint16_t RANGE_SEL : 4;
 	} bits;
-	uint32_t mask;
+	uint16_t mask;
 } ADS127111_RANGE;
 
 //uint16_t conversion1;
@@ -45,7 +45,6 @@ static void clk_init(void){
 	SET_BIT(RCC->APB1ENR, RCC_APB1ENR_TIM3EN_Msk); //enable clock for TIM3
 	SET_BIT(RCC->AHB1ENR, RCC_AHB1ENR_GPIOAEN_Msk | RCC_AHB1ENR_GPIOBEN_Msk); //enable clock for GPIOA and GPIOB
 	SET_BIT(RCC->APB2ENR, RCC_APB2ENR_USART1EN_Msk | RCC_APB2ENR_SPI1EN_Msk); //enable clock for USART1 and SPI1
-
 }
 
 static void pins_init(void){
@@ -80,8 +79,37 @@ static void spi_init(void){
 	SET_BIT(SPI1->CR1, SPI_CR1_DFF_Msk); //Selected frame size as 16 bit
 	SET_BIT(SPI1->CR1, SPI_CR1_MSTR_Msk); //Selected master
 	SET_BIT(SPI1->CR1, SPI_CR1_SSM_Msk); //Selected software SS managment(or else disabling hardware managment for NSS pin, what isnt configured by design)
-	SET_BIT(SPI1->CR1, SPI_CR1_SSI_Msk); //Set virtual NSS pin state to high to sneak way around 1 of MODEFAULT checks
+	SET_BIT(SPI1->CR1, SPI_CR1_SSI_Msk); //Set virtual NSS pin state to high to sneak around 1 of MODEFAULT checks
 	SET_BIT(SPI1->CR1, SPI_CR1_SPE_Msk); //Enabling spi
+}
+
+static uint32_t SPI_read_write_word(uint32_t data){ //Self-explanotary - just for commands
+	uint32_t receive_buffer = 0; //creating buffer for received data
+	while(!(READ_BIT(SPI1->SR,SPI_SR_TXE))); //Waiting until transmit buffer is ready
+	WRITE_REG(SPI1->DR,data >> 16); //Writing MSB
+	while(!(READ_BIT(SPI1->SR,SPI_SR_RXNE))); //Waiting until we have received data
+	receive_buffer = READ_REG(SPI1->DR) << 16; //reading to sneak around another MODEFAULT check - OVERRUN
+	while(!(READ_BIT(SPI1->SR,SPI_SR_TXE))); //Waiting until transmit buffer is ready
+	WRITE_REG(SPI1->DR,data & 0xFFFF); //Writing LSB
+	while(!(READ_BIT(SPI1->SR,SPI_SR_RXNE))); //Waiting until we have received data
+	receive_buffer |= (uint32_t)READ_REG(SPI1->DR); //reading to sneak around another MODEFAULT check - OVERRUN
+	while(READ_BIT(SPI1->SR,SPI_SR_BSY_Msk)); //Waiting for SPI to end transmission(just to be sure and don't cause any glitches on bus)
+	return receive_buffer; //returning data inside buffer as received
+}
+
+static uint16_t SPI_read_hword(void){ //Self-explanotary - just for conversion result read
+	while(!(READ_BIT(SPI1->SR,SPI_SR_TXE))); //Waiting until transmit buffer is ready
+	WRITE_REG(SPI1->DR,0x0000); //Writing NOP to obtain conversion result
+	while(!(READ_BIT(SPI1->SR,SPI_SR_RXNE))); //Waiting until we have received data
+	while(READ_BIT(SPI1->SR,SPI_SR_BSY_Msk)); //Waiting for SPI to end transmission(just to be sure and don't cause any glitches on bus)
+	if(READ_BIT(SPI1->SR,SPI_SR_RXNE)){return READ_REG(SPI1->DR);} //If it is something in buffer, return it as half-word
+	else return -1; //else return -1 as safe constant
+	//TODO: Add a check for returned -1 as error for every place there this function called
+}
+
+static void ADC_init(void){
+	uint32_t payload = 0b1101000 << 25 | range_reg_addr < 16 | ADS127111_RANGE;
+	SPI_write_word(payload);
 }
 
 int main(void){
