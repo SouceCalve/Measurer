@@ -12,6 +12,8 @@ int _lseek(int file, int ptr, int dir) { return 0; }
 int _read(int file, char *ptr, int len) { return 0; }
 int _write(int file, char *ptr, int len) { return len; }
 
+#define range_reg_addr 0b00010100
+
 //Testing functions definition
 
 #ifdef test_interrupt

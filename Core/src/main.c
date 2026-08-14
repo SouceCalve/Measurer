@@ -1,15 +1,34 @@
 #include "stm32f4xx.h"
 #include "main.h"
+#include <stdio.h>
+
+/*typedef union{
+	struct __attribute__((__packed__)){
+		uint32_t : 12;
+		uint32_t RANGE_SEL : 4;
+	} bits;
+	uint32_t mask;
+} ADS8691_RANGE;*/
+
+/*typedef union{
+	struct __attribute__((__packed__)){
+		uint32_t : 4;
+		uint32_t vol_result : 18;
+	} bits;
+	uint32_t mask;
+} conversion_voltage;
+
 typedef union{
 	struct __attribute__((__packed__)){
-		uint16_t : 28;
-		uint16_t RANGE_SEL : 4;
+		uint32_t : 4;
+		uint32_t cur_result : 18;
 	} bits;
-	uint16_t mask;
-} ADS127111_RANGE;
+	uint32_t mask;
+} conversion_current;*/
 
-//uint16_t conversion1;
-//uint16_t conversion2;
+uint32_t conversion_voltage,conversion_current = {0};
+
+char uart_buffer[16] = {0}; //character buffer for sending packet to pc
 
 //Clock definition
 // HSE_FREQ is 25 Mhz
@@ -22,11 +41,7 @@ typedef union{
 #define USART1_mantisa 54 //i dont give a fuck about dinamic calculation for it fucked divider - it set for 115200 baud (100Mhz), so recalculate if you need other baudrate
 #define USART1_fraction 4
 
-#ifndef test_interrupt
-__attribute__((used)) void TIM3_IRQHandler(void){ //fuck off keil, this is interrupt handler
-	CLEAR_BIT(TIM3->SR, TIM_SR_UIF_Msk); //disabling interrupt
-}
-#endif
+uint8_t range = 0; //ADC range
 
 static void clk_init(void){
 	SET_BIT(RCC->CR,RCC_CR_HSEON_Msk); //enabling HSE
@@ -44,6 +59,7 @@ static void clk_init(void){
 	SystemCoreClockUpdate();
 	SET_BIT(RCC->APB1ENR, RCC_APB1ENR_TIM3EN_Msk); //enable clock for TIM3
 	SET_BIT(RCC->AHB1ENR, RCC_AHB1ENR_GPIOAEN_Msk | RCC_AHB1ENR_GPIOBEN_Msk); //enable clock for GPIOA and GPIOB
+	SET_BIT(RCC->AHB1ENR, RCC_AHB1ENR_DMA2EN_Msk); //enable clock for DMA2
 	SET_BIT(RCC->APB2ENR, RCC_APB2ENR_USART1EN_Msk | RCC_APB2ENR_SPI1EN_Msk); //enable clock for USART1 and SPI1
 }
 
@@ -97,19 +113,36 @@ static uint32_t SPI_read_write_word(uint32_t data){ //Self-explanotary - just fo
 	return receive_buffer; //returning data inside buffer as received
 }
 
-static uint16_t SPI_read_hword(void){ //Self-explanotary - just for conversion result read
-	while(!(READ_BIT(SPI1->SR,SPI_SR_TXE))); //Waiting until transmit buffer is ready
-	WRITE_REG(SPI1->DR,0x0000); //Writing NOP to obtain conversion result
-	while(!(READ_BIT(SPI1->SR,SPI_SR_RXNE))); //Waiting until we have received data
-	while(READ_BIT(SPI1->SR,SPI_SR_BSY_Msk)); //Waiting for SPI to end transmission(just to be sure and don't cause any glitches on bus)
-	if(READ_BIT(SPI1->SR,SPI_SR_RXNE)){return READ_REG(SPI1->DR);} //If it is something in buffer, return it as half-word
-	else return -1; //else return -1 as safe constant
-	//TODO: Add a check for returned -1 as error for every place there this function called
+#ifndef test_interrupt
+__attribute__((used)) void TIM3_IRQHandler(void){ //fuck off keil, this is interrupt handler;
+	uint16_t conversion_voltage,conversion_current = {0}; //create new variables for conversions result
+	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS0 low
+	conversion_voltage = SPI_read_write_word(0); //Reading first ADC
+	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS0 high
+	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS1 low
+	conversion_current = SPI_read_write_word(0); //Reading second ADC
+	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS1 high
+	CLEAR_BIT(TIM3->SR, TIM_SR_UIF_Msk); //disabling interrupt
+	sprintf(uart_buffer,"%d;%d\n",conversion_voltage,conversion_current); //Creating string for sending
+	//SET_BIT(DMA2_Stream1->CR,DMA_SxCR_EN_Msk); //Starting one DMA transfer
+	/*for (uint8_t x = 0; x<15; x++){
+		while(!(READ_BIT(USART1->SR,USART_SR_TXE)));
+		WRITE_REG(USART1->DR,uart_buffer[x]);
+	}*/
+}
+#endif
+
+static void ADC_range_change(void){
+	SPI_read_write_word(0b1101000 << 25 | 0 << 24 | range_reg_addr << 16 | range); //Sending command to write word to range register with 3xVref range
 }
 
-static void ADC_init(void){
-	uint32_t payload = 0b1101000 << 25 | range_reg_addr < 16 | ADS127111_RANGE;
-	SPI_write_word(payload);
+static void DMA_init(void){
+	SET_BIT(DMA2_Stream7->CR,DMA_SxCR_MINC_Msk); //Enabling memory address increment
+	MODIFY_REG(DMA2_Stream7->CR, DMA_SxCR_CHSEL_Msk, 4 << DMA_SxCR_CHSEL_Pos); //Selecting Stream7 and Channel 4
+	MODIFY_REG(DMA2_Stream7->NDTR, DMA_SxNDT_Msk, 16 << DMA_SxNDT_Pos); //Selecting buffer size = 16
+	WRITE_REG(DMA2_Stream7->PAR,(uint32_t)(USART1_BASE+0x04)); //Setting peripheral address(where to send data)
+	WRITE_REG(DMA2_Stream7->M0AR,(uint32_t)uart_buffer); //Setting up memory address for reading(from there bytes will be sent)
+	MODIFY_REG(DMA2_Stream7->CR, DMA_SxCR_DIR_Msk, 1 << DMA_SxCR_DIR_Pos); //Selecting Memory to Peripheral sending
 }
 
 int main(void){
@@ -118,6 +151,7 @@ int main(void){
 	timer_init();
 	uart_init();
 	spi_init();
+	DMA_init();
 #ifdef test_uart
 	usart1_echo(); //if you want to test uart, just uncomment define in main.h
 #endif
