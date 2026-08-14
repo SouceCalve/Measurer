@@ -115,20 +115,20 @@ static uint32_t SPI_read_write_word(uint32_t data){ //Self-explanotary - just fo
 
 #ifndef test_interrupt
 __attribute__((used)) void TIM3_IRQHandler(void){ //fuck off keil, this is interrupt handler;
-	uint16_t conversion_voltage,conversion_current = {0}; //create new variables for conversions result
+	uint32_t conversion_voltage,conversion_current = {0}; //create new variables for conversions result
 	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS0 low
-	conversion_voltage = SPI_read_write_word(0); //Reading first ADC
+	conversion_voltage = SPI_read_write_word(0) >> 14; //Reading first ADC
 	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS0 high
-	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS1 low
-	conversion_current = SPI_read_write_word(0); //Reading second ADC
-	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS1 high
+	//MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS1 low
+	conversion_current = 0; //SPI_read_write_word(0) >> 14; //Reading second ADC
+	//MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS1 high
 	CLEAR_BIT(TIM3->SR, TIM_SR_UIF_Msk); //disabling interrupt
-	sprintf(uart_buffer,"%d;%d\n",conversion_voltage,conversion_current); //Creating string for sending
+	sprintf(uart_buffer,"%u;%u\r\n",conversion_voltage,conversion_current); //Creating string for sending
 	//SET_BIT(DMA2_Stream1->CR,DMA_SxCR_EN_Msk); //Starting one DMA transfer
-	/*for (uint8_t x = 0; x<15; x++){
+	for (uint8_t x = 0; x<15; x++){
 		while(!(READ_BIT(USART1->SR,USART_SR_TXE)));
 		WRITE_REG(USART1->DR,uart_buffer[x]);
-	}*/
+	}
 }
 #endif
 
