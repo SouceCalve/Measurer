@@ -13,6 +13,7 @@ int _read(int file, char *ptr, int len) { return 0; }
 int _write(int file, char *ptr, int len) { return len; }
 
 #define range_reg_addr 0b00010100
+#define treshhold_reg_addr 0b00000010
 
 //Testing functions definition
 

@@ -87,6 +87,7 @@ static void uart_init(void){
 //Fpclk = Fck = APB2
 	WRITE_REG(USART1->BRR, (USART1_mantisa << 4) | USART1_fraction); //fuck it - i calculated it by hand - 115200 baud
 	SET_BIT(USART1->CR1, USART_CR1_TE_Msk | USART_CR1_RE_Msk); //enabling TX and RX
+	SET_BIT(USART1->CR3, USART_CR3_DMAT_Msk); //Enabling dma transmitter in uart
 	SET_BIT(USART1->CR1, USART_CR1_UE_Msk); //starting USART
 }
 
@@ -119,16 +120,18 @@ __attribute__((used)) void TIM3_IRQHandler(void){ //fuck off keil, this is inter
 	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS0 low
 	conversion_voltage = SPI_read_write_word(0) >> 14; //Reading first ADC
 	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS0 high
-	//MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS1 low
+	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS1 low
 	conversion_current = 0; //SPI_read_write_word(0) >> 14; //Reading second ADC
-	//MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS1 high
+	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS1 high
 	CLEAR_BIT(TIM3->SR, TIM_SR_UIF_Msk); //disabling interrupt
 	sprintf(uart_buffer,"%u;%u\r\n",conversion_voltage,conversion_current); //Creating string for sending
-	//SET_BIT(DMA2_Stream1->CR,DMA_SxCR_EN_Msk); //Starting one DMA transfer
-	for (uint8_t x = 0; x<15; x++){
+	WRITE_REG(DMA2_Stream7->NDTR, 16); //Selecting buffer size = 16
+	WRITE_REG(DMA2_Stream7->M0AR, (uint32_t)uart_buffer); //Setting up memory address for reading(from there bytes will be sent)
+	SET_BIT(DMA2_Stream7->CR,DMA_SxCR_EN_Msk); //Starting one DMA transfer
+	/*for (uint8_t x = 0; x<15; x++){
 		while(!(READ_BIT(USART1->SR,USART_SR_TXE)));
 		WRITE_REG(USART1->DR,uart_buffer[x]);
-	}
+	}*/
 }
 #endif
 
@@ -140,9 +143,10 @@ static void DMA_init(void){
 	SET_BIT(DMA2_Stream7->CR,DMA_SxCR_MINC_Msk); //Enabling memory address increment
 	MODIFY_REG(DMA2_Stream7->CR, DMA_SxCR_CHSEL_Msk, 4 << DMA_SxCR_CHSEL_Pos); //Selecting Stream7 and Channel 4
 	MODIFY_REG(DMA2_Stream7->NDTR, DMA_SxNDT_Msk, 16 << DMA_SxNDT_Pos); //Selecting buffer size = 16
-	WRITE_REG(DMA2_Stream7->PAR,(uint32_t)(USART1_BASE+0x04)); //Setting peripheral address(where to send data)
+	WRITE_REG(DMA2_Stream7->PAR,(uint32_t)&(USART1->DR)); //Setting peripheral address(where to send data)
 	WRITE_REG(DMA2_Stream7->M0AR,(uint32_t)uart_buffer); //Setting up memory address for reading(from there bytes will be sent)
 	MODIFY_REG(DMA2_Stream7->CR, DMA_SxCR_DIR_Msk, 1 << DMA_SxCR_DIR_Pos); //Selecting Memory to Peripheral sending
+	MODIFY_REG(DMA2_Stream7->FCR, DMA_SxFCR_FTH_Msk, DMA_SxFCR_DMDIS); //fifo treshhold 1/4
 }
 
 int main(void){
