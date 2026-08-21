@@ -38,8 +38,8 @@ char uart_buffer[16] = {0}; //character buffer for sending packet to pc
 #define PLLP 0
 
 //UART defines
-#define USART1_mantisa 54 //i dont give a fuck about dinamic calculation for it fucked divider - it set for 115200 baud (100Mhz), so recalculate if you need other baudrate
-#define USART1_fraction 4
+#define USART1_mantisa 6 //i dont give a fuck about dinamic calculation for it fucked divider - it set for 115200 baud (100Mhz), so recalculate if you need other baudrate
+#define USART1_fraction 12
 
 uint8_t range = 0; //ADC range
 
@@ -53,7 +53,7 @@ static void clk_init(void){
 	MODIFY_REG(FLASH->ACR, FLASH_ACR_LATENCY_Msk, FLASH_ACR_LATENCY_3WS); //Setting up delay to 3 cycles because flash cant keep up to 100 MHz
 	SET_BIT(RCC->CR,RCC_CR_PLLON_Msk); //enabling PLL
 	while(!READ_BIT(RCC->CR,RCC_CR_PLLRDY)); //Waiting until PLL is ready
-	SET_BIT(RCC->CFGR,RCC_CFGR_PPRE1_DIV2);//APB2 pre-divider = 2; APB2 clk = 100 / 2 = 50MHz
+	SET_BIT(RCC->CFGR,RCC_CFGR_PPRE1_DIV2);//APB1 pre-divider = 2; APB1 clk = 100 / 2 = 50MHz
 	SET_BIT(RCC->CFGR,RCC_CFGR_SW_PLL); //Swithing to PLL
 	while(READ_BIT(RCC->CFGR,RCC_CFGR_SWS_Msk)!=RCC_CFGR_SWS_PLL);//Waiting until switching to PLL as clk source
 	SystemCoreClockUpdate();
@@ -120,18 +120,18 @@ __attribute__((used)) void TIM3_IRQHandler(void){ //fuck off keil, this is inter
 	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS0 low
 	conversion_voltage = SPI_read_write_word(0) >> 14; //Reading first ADC
 	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS0 high
-	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS1 low
-	conversion_current = 0; //SPI_read_write_word(0) >> 14; //Reading second ADC
-	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS1 high
+	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD1_Msk, 0); //CS1 low
+	conversion_current = SPI_read_write_word(0) >> 14; //Reading second ADC
+	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD1_Msk, 1); //CS1 high
 	CLEAR_BIT(TIM3->SR, TIM_SR_UIF_Msk); //disabling interrupt
 	sprintf(uart_buffer,"%u;%u\r\n",conversion_voltage,conversion_current); //Creating string for sending
-	WRITE_REG(DMA2_Stream7->NDTR, 16); //Selecting buffer size = 16
-	WRITE_REG(DMA2_Stream7->M0AR, (uint32_t)uart_buffer); //Setting up memory address for reading(from there bytes will be sent)
+	CLEAR_BIT(DMA2_Stream7->CR,DMA_SxCR_EN_Msk); //Stopping DMA to write to it registers
+	while(READ_BIT(DMA2_Stream7->CR,DMA_SxCR_EN_Msk)); //waiting until DMA is fully stop before writing to its registers
+	MODIFY_REG(DMA2->HIFCR, DMA_HIFCR_CTCIF7_Msk | DMA_HIFCR_CFEIF7_Msk | DMA_HIFCR_CDMEIF7_Msk | DMA_HIFCR_CTEIF7_Msk | DMA_HIFCR_CHTIF7_Msk, DMA_HIFCR_CTCIF7_Msk | DMA_HIFCR_CFEIF7_Msk | DMA_HIFCR_CDMEIF7_Msk | DMA_HIFCR_CTEIF7_Msk | DMA_HIFCR_CHTIF7_Msk);
+	//Clearing flags after DMA finishes to prepare it for next run
+	WRITE_REG(DMA2_Stream7->NDTR, 16); // reseting buffer size
+	WRITE_REG(DMA2_Stream7->M0AR, (uint32_t)uart_buffer); // resetting up memory address for reading(from there bytes will be sent)
 	SET_BIT(DMA2_Stream7->CR,DMA_SxCR_EN_Msk); //Starting one DMA transfer
-	/*for (uint8_t x = 0; x<15; x++){
-		while(!(READ_BIT(USART1->SR,USART_SR_TXE)));
-		WRITE_REG(USART1->DR,uart_buffer[x]);
-	}*/
 }
 #endif
 
@@ -146,7 +146,6 @@ static void DMA_init(void){
 	WRITE_REG(DMA2_Stream7->PAR,(uint32_t)&(USART1->DR)); //Setting peripheral address(where to send data)
 	WRITE_REG(DMA2_Stream7->M0AR,(uint32_t)uart_buffer); //Setting up memory address for reading(from there bytes will be sent)
 	MODIFY_REG(DMA2_Stream7->CR, DMA_SxCR_DIR_Msk, 1 << DMA_SxCR_DIR_Pos); //Selecting Memory to Peripheral sending
-	MODIFY_REG(DMA2_Stream7->FCR, DMA_SxFCR_FTH_Msk, DMA_SxFCR_DMDIS); //fifo treshhold 1/4
 }
 
 int main(void){
