@@ -117,14 +117,18 @@ static uint32_t SPI_read_write_word(uint32_t data){ //Self-explanotary - just fo
 #ifndef test_interrupt
 __attribute__((used)) void TIM3_IRQHandler(void){ //fuck off keil, this is interrupt handler;
 	uint32_t conversion_voltage,conversion_current = {0}; //create new variables for conversions result
-	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS0 low
+	CLEAR_BIT(GPIOB->ODR, GPIO_ODR_OD0_Msk); //CS0 low
+	//MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 0); //CS0 low
 	conversion_voltage = SPI_read_write_word(0) >> 14; //Reading first ADC
-	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS0 high
-	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD1_Msk, 0); //CS1 low
+	SET_BIT(GPIOB->ODR, GPIO_ODR_OD0_Msk); //CS0 high
+	//MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD0_Msk, 1); //CS0 high
+	CLEAR_BIT(GPIOB->ODR, GPIO_ODR_OD1_Msk); //CS1 low
+	//MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD1_Msk, 0); //CS1 low
 	conversion_current = SPI_read_write_word(0) >> 14; //Reading second ADC
-	MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD1_Msk, 1); //CS1 high
+	SET_BIT(GPIOB->ODR, GPIO_ODR_OD1_Msk); //CS1 high
+	//MODIFY_REG(GPIOB->ODR, GPIO_ODR_OD1_Msk, 1); //CS1 high
 	CLEAR_BIT(TIM3->SR, TIM_SR_UIF_Msk); //disabling interrupt
-	sprintf(uart_buffer,"%u;%u\r\n",conversion_voltage,conversion_current); //Creating string for sending
+	sprintf(uart_buffer,"%u;%u\n",conversion_voltage,conversion_current); //Creating string for sending
 	CLEAR_BIT(DMA2_Stream7->CR,DMA_SxCR_EN_Msk); //Stopping DMA to write to it registers
 	while(READ_BIT(DMA2_Stream7->CR,DMA_SxCR_EN_Msk)); //waiting until DMA is fully stop before writing to its registers
 	MODIFY_REG(DMA2->HIFCR, DMA_HIFCR_CTCIF7_Msk | DMA_HIFCR_CFEIF7_Msk | DMA_HIFCR_CDMEIF7_Msk | DMA_HIFCR_CTEIF7_Msk | DMA_HIFCR_CHTIF7_Msk, DMA_HIFCR_CTCIF7_Msk | DMA_HIFCR_CFEIF7_Msk | DMA_HIFCR_CDMEIF7_Msk | DMA_HIFCR_CTEIF7_Msk | DMA_HIFCR_CHTIF7_Msk);
